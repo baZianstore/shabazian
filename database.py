@@ -175,10 +175,14 @@ class Database:
             raise DatabaseError("تعذر تحميل الإحصاءات.") from exc
 
     def claim_daily_publication(self, publication_date: date, disease_id: str) -> bool:
-        """حجز نشر اليوم مرة واحدة لمنع التكرار بين المجدول الداخلي والخارجي."""
+        """بدء نشر اليوم بصورة ذرية ومنع المجدولات المتزامنة من تكراره."""
         try:
             self.client.table("daily_publications").insert(
-                {"publication_date": publication_date.isoformat(), "disease_id": disease_id}
+                {
+                    "publication_date": publication_date.isoformat(),
+                    "disease_id": disease_id,
+                    "status": "in_progress",
+                }
             ).execute()
             return True
         except Exception as exc:
@@ -187,3 +191,21 @@ class Database:
             if code == "23505" or "duplicate key" in message or "unique" in message:
                 return False
             raise DatabaseError("تعذر حجز النشر اليومي.") from exc
+
+    def complete_daily_publication(self, publication_date: date) -> None:
+        """تثبيت نجاح النشر بعد انتهاء محاولة توصيل المحتوى."""
+        try:
+            self.client.table("daily_publications").update({"status": "published"}).eq(
+                "publication_date", publication_date.isoformat()
+            ).execute()
+        except Exception as exc:
+            raise DatabaseError("تعذر تثبيت نجاح النشر اليومي.") from exc
+
+    def release_daily_publication(self, publication_date: date, disease_id: str) -> None:
+        """إلغاء حجز غير مكتمل كي تستطيع محاولة لاحقة إعادة النشر."""
+        try:
+            self.client.table("daily_publications").delete().eq("publication_date", publication_date.isoformat()).eq(
+                "disease_id", disease_id
+            ).eq("status", "in_progress").execute()
+        except Exception as exc:
+            raise DatabaseError("تعذر إلغاء حجز النشر اليومي.") from exc

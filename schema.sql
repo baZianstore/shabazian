@@ -55,8 +55,14 @@ create table if not exists public.subscribers (
 create table if not exists public.daily_publications (
     publication_date date primary key,
     disease_id uuid references public.diseases(id) on delete set null,
+    status text not null default 'published' check (status in ('in_progress', 'published')),
     created_at timestamptz not null default now()
 );
+
+-- توافق مع قواعد البيانات التي أُنشئت قبل إضافة حالة النشر.
+alter table public.daily_publications
+    add column if not exists status text not null default 'published'
+    check (status in ('in_progress', 'published'));
 
 create index if not exists diseases_week_number_idx on public.diseases(week_number);
 create index if not exists diseases_system_idx on public.diseases(system);

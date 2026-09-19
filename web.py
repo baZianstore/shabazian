@@ -332,6 +332,8 @@ def create_web_app(settings: Settings, database: Database, bot_application: Appl
             if current_minutes < configured_minutes:
                 return jsonify({"published": False, "reason": "before_scheduled_time"})
             result = await publish_daily_content(bot_application.bot, database, now=local_now)
+            if result.get("retryable"):
+                return jsonify(result), HTTPStatus.SERVICE_UNAVAILABLE
             return jsonify(result)
         except DatabaseError:
             logger.exception("فشل استدعاء النشر المجدول.")

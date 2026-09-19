@@ -244,7 +244,11 @@ async def publish_daily_content(bot: Any, database: Database, *, now: datetime |
     if not claimed:
         return {"published": False, "sent": 0, "failed": 0}
 
-    subscribers = await _database_call(database.list_active_subscribers)
+    try:
+        subscribers = await _database_call(database.list_active_subscribers)
+    except DatabaseError:
+        await _database_call(database.release_daily_publication, current.date(), str(disease["id"]))
+        raise
     sent = 0
     failed = 0
     message = "<b>المحتوى الطبي اليومي</b>\n\n" + format_disease(disease)
@@ -262,6 +266,11 @@ async def publish_daily_content(bot: Any, database: Database, *, now: datetime |
         except TelegramError:
             failed += 1
             logger.warning("فشل إرسال رسالة يومية إلى أحد المشتركين.")
+    if subscribers and sent == 0:
+        await _database_call(database.release_daily_publication, current.date(), str(disease["id"]))
+        return {"published": False, "sent": sent, "failed": failed, "retryable": True}
+
+    await _database_call(database.complete_daily_publication, current.date())
     return {"published": True, "sent": sent, "failed": failed}
 
 

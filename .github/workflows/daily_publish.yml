@@ -2,8 +2,9 @@ name: النشر الطبي اليومي
 
 on:
   schedule:
-    # GitHub Actions schedules are UTC-only. Jerusalem is UTC+2 or UTC+3; the
-    # endpoint gate accepts only the 08:00 local request and absorbs the other.
+    # GitHub Actions evaluates cron in UTC. Jerusalem is UTC+2 or UTC+3; the
+    # application gate accepts only the 08:00 local request and absorbs the
+    # other, so daylight-saving changes do not require editing this workflow.
     - cron: "0 5,6 * * *"
   workflow_dispatch:
 
