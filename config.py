@@ -74,7 +74,11 @@ class Settings:
         flask_secret_key = os.getenv("FLASK_SECRET_KEY", "")
         webhook_secret = os.getenv("WEBHOOK_SECRET", "")
         scheduler_secret = os.getenv("SCHEDULER_SECRET", "")
-        webhook_url = os.getenv("WEBHOOK_URL", "").strip().rstrip("/") or None
+        webhook_url = (
+            os.getenv("WEBHOOK_URL", "").strip().rstrip("/")
+            or os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+            or None
+        )
         render_host = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
         if not webhook_url and render_host:
             webhook_url = f"https://{render_host}"

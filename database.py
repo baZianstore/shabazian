@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from supabase import Client, create_client
@@ -11,6 +11,9 @@ from supabase import Client, create_client
 
 class DatabaseError(RuntimeError):
     """خطأ عام لا يسرّب تفاصيل Supabase إلى المستخدم النهائي."""
+
+
+DAILY_PUBLICATION_LEASE = timedelta(minutes=15)
 
 
 class Database:
@@ -175,13 +178,20 @@ class Database:
             raise DatabaseError("تعذر تحميل الإحصاءات.") from exc
 
     def claim_daily_publication(self, publication_date: date, disease_id: str) -> bool:
-        """بدء نشر اليوم بصورة ذرية ومنع المجدولات المتزامنة من تكراره."""
+        """حجز نشر اليوم، أو استرداد حجز منتهي بعد توقف عامل سابق.
+
+        لا تُسترد السجلات المنشورة؛ أما الحجز الجاري فينتهي بعد مدة محدودة كي لا
+        يمنع تعطل العملية إعادة المحاولة. التحديث المشروط في مسار التكرار ذري.
+        """
+        now = datetime.now(timezone.utc)
+        lease_expires_at = (now + DAILY_PUBLICATION_LEASE).isoformat()
         try:
             self.client.table("daily_publications").insert(
                 {
                     "publication_date": publication_date.isoformat(),
                     "disease_id": disease_id,
                     "status": "in_progress",
+                    "lease_expires_at": lease_expires_at,
                 }
             ).execute()
             return True
@@ -189,7 +199,18 @@ class Database:
             code = getattr(exc, "code", "")
             message = str(exc).lower()
             if code == "23505" or "duplicate key" in message or "unique" in message:
-                return False
+                try:
+                    response = (
+                        self.client.table("daily_publications")
+                        .update({"lease_expires_at": lease_expires_at})
+                        .eq("publication_date", publication_date.isoformat())
+                        .eq("status", "in_progress")
+                        .lt("lease_expires_at", now.isoformat())
+                        .execute()
+                    )
+                    return bool(response.data)
+                except Exception as reclaim_exc:
+                    raise DatabaseError("تعذر استرداد حجز النشر اليومي المنتهي.") from reclaim_exc
             raise DatabaseError("تعذر حجز النشر اليومي.") from exc
 
     def complete_daily_publication(self, publication_date: date) -> None:

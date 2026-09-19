@@ -56,6 +56,7 @@ create table if not exists public.daily_publications (
     publication_date date primary key,
     disease_id uuid references public.diseases(id) on delete set null,
     status text not null default 'published' check (status in ('in_progress', 'published')),
+    lease_expires_at timestamptz not null default now(),
     created_at timestamptz not null default now()
 );
 
@@ -63,6 +64,10 @@ create table if not exists public.daily_publications (
 alter table public.daily_publications
     add column if not exists status text not null default 'published'
     check (status in ('in_progress', 'published'));
+
+-- الحجز الجاري مؤقت؛ يتيح هذا استرداده بعد توقف عامل النشر قبل إتمامه.
+alter table public.daily_publications
+    add column if not exists lease_expires_at timestamptz not null default now();
 
 create index if not exists diseases_week_number_idx on public.diseases(week_number);
 create index if not exists diseases_system_idx on public.diseases(system);
